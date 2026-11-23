@@ -1,7 +1,7 @@
 # SAO Frames
 
-## v1.6.0
-- First public release.
+## v1.6.1
+- First public release on CurseForge.
 - Guild names under player names (frames and nameplates); pulsing "z Z Z" on the player frame while resting.
 - SAO-style quest windows (pickup, progress, turn-in, greeting) and NPC gossip window.
 - Softer steel-gray "white box" palette for vendor, trade, loot and roll windows; clean price digits.

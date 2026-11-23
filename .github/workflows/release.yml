@@ -52,6 +52,13 @@ jobs:
             echo "release=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Run the BigWigs packager directly. A tag pushed by this job with GITHUB_TOKEN doesn't start
+      # a new workflow run, and the packager skips branch builds whose commit is tagged ("future
+      # tag"), so tell it this is that tag's build.
       - name: Package and upload to CurseForge
         if: steps.version.outputs.release == 'true'
-        uses: BigWigsMods/packager@v2
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/BigWigsMods/packager/v2/release.sh -o /tmp/release.sh
+          GITHUB_REF="refs/tags/${TAG}" GITHUB_REF_NAME="${TAG}" GITHUB_REF_TYPE=tag bash /tmp/release.sh
