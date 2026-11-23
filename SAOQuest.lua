@@ -663,6 +663,23 @@ local function ButtonFonts()
     fonts.d = Make("SAOFramesQuestButtonFontOff", { 0.58, 0.60, 0.64 })
 end
 
+-- Centre the pair at the bottom of the panel: "(o) ACCEPT   DECLINE (x)" with each button
+-- hugging its label, left button ending / right button starting just off the centre line.
+local function PlaceActionButton(btn, d)
+    local parent = d.parent
+    if not parent then return end
+    local w = BTN_W
+    local ok, fs = pcall(btn.GetFontString, btn)
+    if ok and fs then
+        local okW, tw = pcall(fs.GetStringWidth, fs)
+        if okW and not IsSecret(tw) and type(tw) == "number" and tw > 0 then w = DISC + 4 + 5 + tw + 6 end
+    end
+    pcall(btn.SetWidth, btn, w)
+    pcall(btn.ClearAllPoints, btn)
+    if d.right then pcall(btn.SetPoint, btn, "BOTTOMLEFT", parent, "BOTTOM", 18, 10)
+    else pcall(btn.SetPoint, btn, "BOTTOMRIGHT", parent, "BOTTOM", -18, 10) end
+end
+
 local function RefreshActionButton(btn)
     local d = btn and btnUI[btn]
     if not d then return end
@@ -676,6 +693,7 @@ local function RefreshActionButton(btn)
         local u = string.upper(t)
         if u ~= t then pcall(btn.SetText, btn, u) end
     end
+    if enabled then PlaceActionButton(btn, d) end
 end
 
 local function DiscDown(btn)
@@ -701,7 +719,7 @@ local function SkinActionButton(btn, tex, glow)
     -- which side of the panel Blizzard put it on (its anchors stay untouched)
     local okP, point = pcall(btn.GetPoint, btn, 1)
     local right = okP and type(point) == "string" and not IsSecret(point) and point:find("RIGHT", 1, true) ~= nil
-    local d = {}
+    local d = { right = right, parent = btn:GetParent() }
     d.disc = NewTexture(btn, "ARTWORK", 7, Media(tex))
     d.disc:SetSize(DISC, DISC)
     d.disc:SetPoint(right and "RIGHT" or "LEFT", btn, right and "RIGHT" or "LEFT", right and -4 or 4, 0)
