@@ -2065,7 +2065,10 @@ UpdateThreat = function(f)
         f.threatTexs = texs
         wipe(texs)
         texs[1] = g
-        if db.threatBars then texs[#texs + 1] = f.bar:GetStatusBarTexture() end
+        -- A mob tagged by someone else keeps its grey bar even once it's fighting you
+        -- (the glow and arrows still show your threat).
+        local tapped = Plain(UnitIsTapDenied(u)) == true
+        if db.threatBars and not tapped then texs[#texs + 1] = f.bar:GetStatusBarTexture() end
         if f.spikes then for _, sp in ipairs(f.spikes) do texs[#texs + 1] = sp end end
         local ok, pulse, why
         if IsTank() and IsSecret(status) then
@@ -2098,7 +2101,7 @@ UpdateThreat = function(f)
             .. (IsSecret(status) and ", status secret" or "")) or "paint failed"
         g:SetShown(ok)
         ShowSpikes(f, ok, pulse)
-        f.threatColored = db.threatBars and ok or false
+        f.threatColored = db.threatBars and ok and not tapped or false
         if ok then
             -- Text color matches the arrows (scaled % already accounts for the
             -- 110% / 130% pull margin: 100 scaled = you pull).
