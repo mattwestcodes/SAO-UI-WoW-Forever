@@ -24,7 +24,7 @@ local ADDON, ns = ...
 ---------------------------------------------------------------------------
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
-local W, H, GAP = 300, 142, 6  -- dialog size (LootPanel.tga is drawn for exactly this)
+local W, H, GAP = 300, 134, 6  -- dialog size (trimmed: no dead space under the buttons)
 local BTN = 30                  -- round button size
 local BTN_STEP = 64             -- distance between button centers
 local LOOT_DEFAULTS = { enabled = true, pos = { "TOP", "TOP", 0, -180 }, scale = 1 }
@@ -427,9 +427,14 @@ local function CreateDialog()
     d.icon:SetSize(32, 32)
     d.icon:SetPoint("CENTER", d.outer, "CENTER")
     d.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-    if d.icon.SetMask and not pcall(d.icon.SetMask, d.icon, Media("LootIconMask")) then
-        pcall(d.icon.SetMask, d.icon, "Interface\\CharacterFrame\\TempPortraitAlphaMask")
+    -- Round icon via a mask texture (the same way the other SAO windows do it); the old
+    -- SetMask call could draw the mask itself as stripes on some clients.
+    local m = d:CreateMaskTexture()
+    m:SetAllPoints(d.icon)
+    if not pcall(m.SetTexture, m, Media("LootIconMask"), "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE") then
+        pcall(m.SetTexture, m, "Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
     end
+    d.icon:AddMaskTexture(m)
     d.ring = d:CreateTexture(nil, "ARTWORK", nil, 3)
     d.ring:SetTexture(Media("LootRing"))
     d.ring:SetSize(37, 37)
@@ -523,7 +528,9 @@ local function Fill(d, info)
     SetAllowed(btns.pass, true, nil)
     btns.de:SetShown(Plain(info.canDE) == true)
     LayoutRow(d.row, d.list)
-    d.icon:SetTexture(info.icon)
+    local icon = info.icon -- may be a hidden (secret) value: only nil-check it when plain
+    if not IsSecret(icon) and icon == nil then icon = "Interface\\Icons\\INV_Misc_QuestionMark" end
+    d.icon:SetTexture(icon)
     d.name:SetText(info.name)
     local r, g, b = QualityRGB(info.quality)
     d.name:SetTextColor(r, g, b)
