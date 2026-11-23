@@ -1,0 +1,9 @@
+package-as: SAOFrames
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+ignore:
+  - CURSEFORGE.md
+  - .github

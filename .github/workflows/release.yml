@@ -1,0 +1,27 @@
+# Packages the addon and uploads it to CurseForge whenever a version tag is pushed.
+#   git tag v1.6.0 && git push --tags          -> release
+#   git tag v1.6.1-beta1 && git push --tags    -> beta (tags with "alpha"/"beta" upload as that type)
+# One-time setup: repo Settings > Secrets and variables > Actions > New secret named CF_API_KEY
+# (token from authors.curseforge.com > settings > API Tokens), and put the CurseForge project ID
+# in SAOFrames.toc as "## X-Curse-Project-ID: <id>".
+name: Release
+
+on:
+  push:
+    tags: ['**']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      CF_API_TOKEN: ${{ secrets.CF_API_KEY }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+      GH_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: BigWigsMods/packager@v2

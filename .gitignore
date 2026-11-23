@@ -1,0 +1,7 @@
+# Local SAO font (user-supplied, never published)
+Fonts/*.ttf
+Fonts/*.otf
+*.bak
+*.orig
+.DS_Store
+Thumbs.db
