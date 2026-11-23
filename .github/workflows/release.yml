@@ -1,14 +1,21 @@
-# Packages the addon and uploads it to CurseForge whenever a version tag is pushed.
-#   git tag v1.6.0 && git push --tags          -> release
-#   git tag v1.6.1-beta1 && git push --tags    -> beta (tags with "alpha"/"beta" upload as that type)
-# One-time setup: repo Settings > Secrets and variables > Actions > New secret named CF_API_KEY
-# (token from authors.curseforge.com > settings > API Tokens), and put the CurseForge project ID
-# in SAOFrames.toc as "## X-Curse-Project-ID: <id>".
+# Packages the addon and uploads it to CurseForge.
+#
+# How to release: bump "## Version:" in SAOFrames.toc (and add a CHANGELOG.md entry), then push to
+# main. If tag v<version> doesn't exist yet, this job creates it and publishes that version.
+# Pushing a version tag yourself (git tag v1.7.0 && git push --tags) or running the workflow by hand
+# (Actions > Release > Run workflow) also works.
+# Tags/versions containing "alpha" or "beta" upload as that release type.
+#
+# One-time setup: repo secret CF_API_KEY (authors.curseforge.com > settings > API Tokens);
+# the CurseForge project ID is in SAOFrames.toc as "## X-Curse-Project-ID".
 name: Release
 
 on:
   push:
-    tags: ['**']
+    branches: [main]
+    paths: ['SAOFrames.toc', '.github/workflows/release.yml']
+    tags: ['v*']
+  workflow_dispatch:
 
 jobs:
   release:
@@ -24,4 +31,27 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: BigWigsMods/packager@v2
+
+      - name: Tag the TOC version if it isn't released yet
+        id: version
+        run: |
+          VERSION=$(grep -m1 '^## Version:' SAOFrames.toc | sed 's/^## Version:[[:space:]]*//' | tr -d '\r')
+          TAG="v${VERSION}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "Triggered by tag ${GITHUB_REF_NAME}"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          elif git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "$TAG already exists - nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "SAO Frames $TAG"
+            git push origin "$TAG"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package and upload to CurseForge
+        if: steps.version.outputs.release == 'true'
+        uses: BigWigsMods/packager@v2
