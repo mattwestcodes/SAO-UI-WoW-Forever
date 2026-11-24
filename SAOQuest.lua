@@ -666,7 +666,13 @@ end
 -- Centre the pair at the bottom of the panel: "(o) ACCEPT   DECLINE (x)" with each button
 -- hugging its label, left button ending / right button starting just off the centre line.
 local function PlaceActionButton(btn, d)
+    -- anchor to the whole window (QuestFrame / GossipFrame), not the inner panel
     local parent = d.parent
+    for _ = 1, 4 do
+        if not parent or parent == G("QuestFrame") or parent == G("GossipFrame") then break end
+        parent = parent:GetParent()
+    end
+    parent = parent or d.parent
     if not parent then return end
     local w = BTN_W
     local ok, fs = pcall(btn.GetFontString, btn)
@@ -676,8 +682,29 @@ local function PlaceActionButton(btn, d)
     end
     pcall(btn.SetWidth, btn, w)
     pcall(btn.ClearAllPoints, btn)
-    if d.right then pcall(btn.SetPoint, btn, "BOTTOMLEFT", parent, "BOTTOM", 18, 10)
-    else pcall(btn.SetPoint, btn, "BOTTOMRIGHT", parent, "BOTTOM", -18, 10) end
+    -- just under the panel's text box (its scroll frame), centred on the window
+    local area
+    local okN, pname = pcall(d.parent.GetName, d.parent)
+    if okN and type(pname) == "string" then
+        for _, pair in ipairs(PANELS) do if pair[1] == pname then area = G(pair[2]) end end
+    end
+    if area then
+        if d.right then pcall(btn.SetPoint, btn, "TOPLEFT", area, "BOTTOM", 18, -12)
+        else pcall(btn.SetPoint, btn, "TOPRIGHT", area, "BOTTOM", -18, -12) end
+        -- keep the pair centred on the whole window, not the scroll area
+        local okX = pcall(function()
+            local ax = area:GetCenter()
+            local fx = parent:GetCenter()
+            if ax and fx and not IsSecret(ax) and not IsSecret(fx) then
+                btn:ClearAllPoints()
+                local dx = fx - ax
+                if d.right then btn:SetPoint("TOPLEFT", area, "BOTTOM", 18 + dx, -12)
+                else btn:SetPoint("TOPRIGHT", area, "BOTTOM", -18 + dx, -12) end
+            end
+        end)
+        if not okX then return end
+    elseif d.right then pcall(btn.SetPoint, btn, "BOTTOMLEFT", parent, "BOTTOM", 18, -22)
+    else pcall(btn.SetPoint, btn, "BOTTOMRIGHT", parent, "BOTTOM", -18, -22) end
 end
 
 local function RefreshActionButton(btn)
@@ -825,7 +852,8 @@ local function HideButtonFrameArt(frame)
 end
 
 local function BuildChrome(frame, ui, label)
-    ui.panel = MakeSlices(frame, frame, Media("MerchantPanel"), 128, 32, 32, -12, 12, 12, -12, "BACKGROUND", -8)
+    -- (extra room at the bottom for the round action buttons under the text box)
+    ui.panel = MakeSlices(frame, frame, Media("MerchantPanel"), 128, 32, 32, -12, 12, 12, -28, "BACKGROUND", -8)
     SliceColor(ui.panel, { 0.76, 0.80, 0.86 }, 0.94) -- soft steel-gray glass
 
     ui.headerBox = Box(frame)
