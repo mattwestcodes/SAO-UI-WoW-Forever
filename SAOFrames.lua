@@ -2027,10 +2027,15 @@ UpdateThreat = function(f)
             return
         end
         local tanking, status, scaled, raw = UnitDetailedThreatSituation("player", u)
-        if not IsSecret(status) and status == nil then
-            -- Some clients answer the simple query when the detailed one is empty.
-            local st = UnitThreatSituation("player", u)
-            if IsSecret(st) or st ~= nil then status = st end
+        if IsSecret(status) or status == nil then
+            -- The simple query is restricted less often than the detailed one: when the
+            -- detailed status is empty or hidden, a readable 0-3 status from it lets the
+            -- plate grade green / orange / red instead of only "on you or not".
+            local okS, st = pcall(UnitThreatSituation, "player", u)
+            if okS then
+                if not IsSecret(st) and st ~= nil then status = st
+                elseif not IsSecret(status) and status == nil and IsSecret(st) then status = st end
+            end
         end
         -- Nameplate tokens can be restricted (empty or hidden/secret answers). If this
         -- plate is also our target / focus / mouseover / a boss, ask through that token,
