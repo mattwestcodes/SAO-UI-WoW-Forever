@@ -2542,7 +2542,9 @@ local function CreatePlate(plate)
 
     AddSpikes(f, 34, 22, { "RIGHT", f.bar, "LEFT", -1, 3 }, { "LEFT", f.badge, "RIGHT", 2, 0 }, 4)
     -- raid marker above the plate's right end (debuffs grow up from the left)
-    AddRaidMark(f, 20, "BOTTOMRIGHT", f, "TOPRIGHT", 0, 2)
+    -- Raid marker centered over the bar, just above the debuff row (clear of the name
+    -- and of up to 5 debuffs): bar top -> plate top is 13, + 3 gap + 18 icons + 2.
+    AddRaidMark(f, 22, "BOTTOM", f.bar, "TOP", 0, 36)
 
     AddCastBar(f, 16, -15, PLATE_BAR_W - 22, 10)
 
