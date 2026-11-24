@@ -2661,9 +2661,32 @@ end
 -- Friendly nameplates are a Blizzard setting (CVars). The game hides them by default
 -- and shows friendly units as name-only labels, which addons can't restyle.
 -- CVars can only change out of combat; unknown CVar names are ignored safely.
+-- Game settings (CVars) are saved by the game itself, so they'd outlive the addon. Remember
+-- each one's value from before SAO Frames first touched it and put it back at logout, so
+-- disabling or removing the addon leaves nameplates exactly as the player had them.
 local function SetCVarSafe(name, value)
+    local get = C_CVar and C_CVar.GetCVar or GetCVar
+    if not db.cvarOriginal then
+        -- Earlier versions already changed these without remembering the old values, so the
+        -- current ones aren't the player's: start from the game's defaults for them.
+        db.cvarOriginal = {
+            nameplateShowOnlyNames = "0",
+            nameplateShowOnlyNameForFriendlyPlayerUnits = "0",
+            nameplateUseClassColorForFriendlyPlayerUnitNames = "0",
+        }
+    end
+    if db.cvarOriginal[name] == nil and get then
+        local ok, cur = pcall(get, name)
+        if ok and type(cur) == "string" then db.cvarOriginal[name] = cur end
+    end
     local fn = C_CVar and C_CVar.SetCVar or SetCVar
     if fn then pcall(fn, name, value) end
+end
+
+function ns.RestoreCVars()
+    local fn = C_CVar and C_CVar.SetCVar or SetCVar
+    if not (fn and db and db.cvarOriginal) then return end
+    for name, value in pairs(db.cvarOriginal) do pcall(fn, name, value) end
 end
 
 local function ApplyFriendlyPlateCVars()
@@ -2712,6 +2735,7 @@ local function InitNameplates()
     ev:RegisterEvent("PLAYER_REGEN_ENABLED")
     ev:RegisterEvent("PLAYER_LEVEL_UP") -- re-color difficulty levels
     ev:RegisterEvent("PLAYER_ENTERING_WORLD")  -- dungeon in/out: friendly plate style
+    ev:RegisterEvent("PLAYER_LOGOUT")          -- put the player's own nameplate settings back
     ev:RegisterEvent("ZONE_CHANGED_NEW_AREA")
     ev.cvarsApplied = not InCombatLockdown()
     for _, e in ipairs({ "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_AURA", "UNIT_NAME_UPDATE",
@@ -2725,6 +2749,8 @@ local function InitNameplates()
             if not ok then LogError("plate added: " .. tostring(err)) end
         elseif event == "NAME_PLATE_UNIT_REMOVED" then
             OnPlateRemoved(unit)
+        elseif event == "PLAYER_LOGOUT" then
+            ns.RestoreCVars()
         elseif event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then
             if InCombatLockdown() then ev.cvarsApplied = false else ApplyFriendlyPlateCVars() end
         elseif event == "PLAYER_LEVEL_UP" then
