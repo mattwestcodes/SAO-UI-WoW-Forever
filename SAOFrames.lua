@@ -3274,6 +3274,7 @@ local function Help()
     print("  /sao threatbars  - color enemy health bars by threat in combat (now " .. (db.threatBars and "on" or "off") .. ")")
     print("  /sao clickthrough - friendly nameplates ignore clicks (now " .. (db.friendlyClickThrough ~= false and "on" or "off") .. ")")
     print("  /sao mouse       - show which frame is under the cursor (if a click doesn't go through)")
+    print("  /sao clicks      - what each of your last right-clicks landed on")
     print("  /sao targetred   - the target frame's bar is always red on enemies (now " .. (db.targetRed and "on" or "off") .. ")")
     print("  /sao threat  - toggle threat glow (now " .. (db.threat and "on" or "off") .. ")")
     print("  /sao tank    - threat role: auto / tank / dps (now " .. db.threatRole .. ")")
@@ -3750,16 +3751,12 @@ local function HandleCommand(msg)
         -- What is under the cursor right now (for "my click didn't go through").
         local foci = GetMouseFoci and GetMouseFoci() or { GetMouseFocus and GetMouseFocus() }
         if #foci == 0 then Print("nothing under the cursor (the game world).") end
-        for _, fr in ipairs(foci) do
-            local okF, forb = pcall(fr.IsForbidden, fr)
-            local label
-            if okF and forb then label = "a locked game frame (e.g. a nameplate)"
-            else
-                local okN, nm = pcall(fr.GetDebugName, fr)
-                label = okN and nm or tostring(fr)
-            end
-            Print("under cursor: " .. tostring(label))
-        end
+        for _, fr in ipairs(foci) do Print("under cursor: " .. tostring(ns.FrameLabel(fr))) end
+    elseif cmd == "clicks" then
+        local log = ns.clickLog or {}
+        if #log == 0 then Print("no right-clicks recorded yet this session.") end
+        Print("last right-clicks (newest first; \"game world\" = the click reached the world):")
+        for _, line in ipairs(log) do print("   " .. line) end
     elseif cmd == "targetred" then
         db.targetRed = not db.targetRed
         for _, fr in pairs(frames) do fr.threatColored = false end
@@ -3847,6 +3844,37 @@ local function HandleCommand(msg)
     else
         Help()
     end
+end
+
+-- Click logger: every right-click remembers what was under the cursor, so a click
+-- that "didn't work" can be traced to the frame that caught it (/sao clicks).
+do
+    function ns.FrameLabel(fr)
+        if fr == WorldFrame then return "game world" end
+        local okF, forb = pcall(fr.IsForbidden, fr)
+        if okF and forb then return "a locked game frame (nameplate or Blizzard UI)" end
+        local okN, nm = pcall(fr.GetDebugName, fr)
+        if okN and nm and nm ~= "" then return nm end
+        local okP, parent = pcall(fr.GetParent, fr)
+        local pn = okP and parent and select(2, pcall(parent.GetDebugName, parent))
+        return "unnamed frame" .. (type(pn) == "string" and (" inside " .. pn) or "")
+    end
+    local log = {}
+    ns.clickLog = log
+    local lf = CreateFrame("Frame")
+    pcall(lf.RegisterEvent, lf, "GLOBAL_MOUSE_DOWN")
+    lf:SetScript("OnEvent", function(_, _, button)
+        if button ~= "RightButton" then return end
+        local foci = GetMouseFoci and GetMouseFoci() or { GetMouseFocus and GetMouseFocus() }
+        local names = {}
+        for i, fr in ipairs(foci) do
+            if i > 3 then break end
+            names[#names + 1] = ns.FrameLabel(fr)
+        end
+        if #names == 0 then names[1] = "game world" end
+        table.insert(log, 1, date("%H:%M:%S") .. "  " .. table.concat(names, "  /  "))
+        if #log > 15 then log[16] = nil end
+    end)
 end
 
 SlashCmdList.SAOFRAMES = function(msg)
