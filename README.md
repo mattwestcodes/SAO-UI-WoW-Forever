@@ -103,8 +103,8 @@ Enemies only (target frame and nameplates). Arrows and edge glow share one color
   (orange/red pulse).
 While you're on an enemy's threat list its health bars (nameplate, target, focus) take the same
 threat color; out of combat nameplates show reaction color and frames show health color.
-`/sao threatbars` turns this off. The enemy you have selected always shows a red bar on its
-nameplate and the target frame (tapped mobs stay grey); `/sao targetred` turns that off.
+`/sao threatbars` turns this off. The target frame always shows a red bar on an enemy (nameplates
+keep their threat colors; tapped mobs stay grey); `/sao targetred` turns that off.
 Role is detected automatically: Defensive Stance, Bear/Dire Bear Form or Righteous Fury = tank;
 otherwise your spec, then your group role. Your own, party and raid frames glow when that
 person has aggro.

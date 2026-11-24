@@ -556,13 +556,11 @@ local function ColorByReaction(f, u)
     end
 end
 
--- The enemy you have selected (target frame, and that enemy's nameplate) always
--- shows a red bar, whatever its threat. Tapped mobs stay grey.
+-- The target frame always shows a red bar on an enemy, whatever its threat
+-- (nameplates keep their threat colors). Tapped mobs stay grey.
 local function IsTargetEnemy(f, u)
-    if f.preview or db.targetRed == false then return false end
-    local isT
-    if f.isPlate then isT = f.isTargetPlate else isT = f.unit == "target" end
-    return isT and Plain(UnitCanAttack("player", u or f.unit)) == true or false
+    if f.preview or f.isPlate or db.targetRed == false or f.unit ~= "target" then return false end
+    return Plain(UnitCanAttack("player", u or f.unit)) == true
 end
 
 local function ColorHealth(f, u, cur, max)
@@ -2596,12 +2594,6 @@ local function PlateTargetHighlight(f)
         local ok, tp = pcall(C_NamePlate.GetNamePlateForUnit, "target", false)
         isTarget = ok and tp ~= nil and tp == f:GetParent()
     end
-    isTarget = isTarget and true or false
-    if f.isTargetPlate ~= isTarget then
-        f.isTargetPlate = isTarget
-        f.threatColored = false -- selected enemy turns red / previous one regains threat colors
-        if f.ready then UpdateThreat(f); UpdateHealth(f) end
-    end
     f:SetScale(isTarget and 1.15 or 1) -- our own plain frame: allowed in combat
     f.auraDirty = true -- re-sync the aura rows' scale with the plate
     f:SetAlpha(isTarget and 1 or 0.9)
@@ -2672,7 +2664,6 @@ local function OnPlateRemoved(unit)
         if f.threatGlow then f.threatGlow:Hide() end
         if f.cast then f.cast.plainTiming = false; f.cast.interruptedAt = nil; f.cast:Hide() end
         f.threatColored = false
-        f.isTargetPlate = nil
         if f.auraHolders then
             for _, h in ipairs(f.auraHolders) do SetContainerUnit(h, nil); h:Hide() end
         end
@@ -3276,7 +3267,7 @@ local function Help()
     print("  /sao threatbars  - color enemy health bars by threat in combat (now " .. (db.threatBars and "on" or "off") .. ")")
     print("  /sao clickthrough - friendly nameplates ignore clicks (now " .. (db.friendlyClickThrough ~= false and "on" or "off") .. ")")
     print("  /sao mouse       - show which frame is under the cursor (if a click doesn't go through)")
-    print("  /sao targetred   - your selected enemy's bar is always red (now " .. (db.targetRed and "on" or "off") .. ")")
+    print("  /sao targetred   - the target frame's bar is always red on enemies (now " .. (db.targetRed and "on" or "off") .. ")")
     print("  /sao threat  - toggle threat glow (now " .. (db.threat and "on" or "off") .. ")")
     print("  /sao tank    - threat role: auto / tank / dps (now " .. db.threatRole .. ")")
     print("  /sao bg  - toggle the dark panel behind player/target/party (now " .. (db.background and "on" or "off") .. ")")
@@ -3512,7 +3503,7 @@ local function BuildOptions()
     Place(OptCheck(f, "Floating Z's while resting", function() return db.restZ ~= false end, function() Run("restz") end))
     Place(OptCheck(f, "Elite / rare / boss borders", function() return db.eliteBorders end, function() Run("elite") end))
     Place(OptCheck(f, "Color enemy health bars by threat", function() return db.threatBars end, function() Run("threatbars") end))
-    Place(OptCheck(f, "Selected enemy's bar is always red", function() return db.targetRed end, function() Run("targetred") end))
+    Place(OptCheck(f, "Target frame bar always red on enemies", function() return db.targetRed end, function() Run("targetred") end))
     Place(OptCheck(f, "Dark background behind frames", function() return db.background end, function() Run("bg") end))
     Place(OptCheck(f, "Smooth bar animation", function() return db.smooth end, function() Run("smooth") end))
     Place(OptCheck(f, "Hide Blizzard unit and raid frames (reloads UI)", function() return db.hideBlizzard end,
@@ -3767,8 +3758,7 @@ local function HandleCommand(msg)
         for _, fr in pairs(frames) do fr.threatColored = false end
         for _, pl in pairs(plateByUnit) do pl.threatColored = false end
         UpdateAll()
-        for _, pl in pairs(plateByUnit) do if pl.ready then UpdateThreat(pl); UpdateHealth(pl) end end
-        Print("red bar on your selected enemy " .. (db.targetRed and "on." or "off."))
+        Print("red bar on the enemy target frame " .. (db.targetRed and "on." or "off."))
     elseif cmd == "raidtools" then
         db.hideRaidTools = not db.hideRaidTools
         ReloadUI()
