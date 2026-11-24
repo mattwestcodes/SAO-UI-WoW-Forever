@@ -33,6 +33,7 @@ local DEFAULTS = {
     levelColors = true,    -- color enemy levels gray / green / white / orange / red by difficulty
     friendlyPlates = true, -- turn on friendly player nameplates (health bars, not name-only)
     friendlyNPCs = false,  -- also friendly NPC nameplates (busy in cities)
+    friendlyClickThrough = true, -- friendly nameplates don't catch mouse clicks
     threatRole = "auto",   -- "auto" (stance/form/spec/role), "TANK" or "DPS"
     locked = true,
     hideBlizzard = true,
@@ -2723,6 +2724,17 @@ local function ApplyFriendlyPlateCVars()
         SetCVarSafe("nameplateShowOnlyNameForFriendlyPlayerUnits", "0")  -- 12.x name
         db.onlyNamesForced = nil
     end
+    -- Friendly plates click-through: their (large) hit boxes otherwise catch clicks
+    -- meant for the mob or the world behind a party member. Huge positive insets
+    -- shrink the friendly hit area to nothing; 0s restore the game's default.
+    if C_NamePlateManager and C_NamePlateManager.SetNamePlateHitTestInsets then
+        local friendly = Enum and Enum.NamePlateType and Enum.NamePlateType.Friendly or 0
+        local n = db.friendlyClickThrough ~= false and 10000 or 0
+        if n > 0 or ns.clickThroughSet then
+            ns.clickThroughOk = pcall(C_NamePlateManager.SetNamePlateHitTestInsets, friendly, n, n, n, n)
+            ns.clickThroughSet = n > 0 or nil
+        end
+    end
     -- SAO font on the game's own nameplate text too (the locked friendly plates in
     -- dungeons use these shared fonts; our own plates set their fonts directly).
     if ns.fontPath then
@@ -3262,6 +3274,8 @@ local function Help()
     print("  /sao guilds  - <Guild> under player names (now " .. (db.guildNames ~= false and "on" or "off") .. ");  /sao restz - floating Z's while resting")
     print("  /sao elite   - gold/silver/red borders on elite, rare and boss enemies (now " .. (db.eliteBorders and "on" or "off") .. ")")
     print("  /sao threatbars  - color enemy health bars by threat in combat (now " .. (db.threatBars and "on" or "off") .. ")")
+    print("  /sao clickthrough - friendly nameplates ignore clicks (now " .. (db.friendlyClickThrough ~= false and "on" or "off") .. ")")
+    print("  /sao mouse       - show which frame is under the cursor (if a click doesn't go through)")
     print("  /sao targetred   - your selected enemy's bar is always red (now " .. (db.targetRed and "on" or "off") .. ")")
     print("  /sao threat  - toggle threat glow (now " .. (db.threat and "on" or "off") .. ")")
     print("  /sao tank    - threat role: auto / tank / dps (now " .. db.threatRole .. ")")
@@ -3389,7 +3403,7 @@ local function Clamp(v, lo, hi) return math.max(lo, math.min(hi, v)) end
 
 local function BuildOptions()
     local f = CreateFrame("Frame", "SAOFramesOptions", UIParent)
-    f:SetSize(620, 784)
+    f:SetSize(620, 808)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetClampedToScreen(true)
@@ -3489,6 +3503,7 @@ local function BuildOptions()
         function() Confirm("Toggle SAO nameplates? This reloads your UI.", "plates") end))
     Place(OptCheck(f, "Friendly player health bars", function() return db.friendlyPlates end, function() Run("friendly") end))
     Place(OptCheck(f, "Friendly NPC health bars", function() return db.friendlyNPCs end, function() Run("friendlynpcs") end))
+    Place(OptCheck(f, "Clicks pass through friendly nameplates", function() return db.friendlyClickThrough ~= false end, function() Run("clickthrough") end))
     Place(OptCheck(f, "Threat glow and aggro arrows", function() return db.threat end, function() Run("threat") end))
     Place(OptCheck(f, "Color enemy levels by difficulty", function() return db.levelColors end, function() Run("levels") end))
     Place(OptCheck(f, "Show incoming heals on health bars", function() return db.healPredict end, function() Run("heals") end))
@@ -3727,6 +3742,26 @@ local function HandleCommand(msg)
         for _, pl in pairs(plateByUnit) do pl.threatColored = false end
         UpdateAll()
         Print("threat-colored enemy health bars " .. (db.threatBars and "on." or "off."))
+    elseif cmd == "clickthrough" then
+        if InCombatLockdown() then Print("can't change nameplate clicks in combat; try again after.") return end
+        db.friendlyClickThrough = db.friendlyClickThrough == false
+        ApplyFriendlyPlateCVars()
+        Print("click-through friendly nameplates " .. (db.friendlyClickThrough and "on." or "off.")
+            .. (ns.clickThroughOk == false and " (the game refused the change)" or ""))
+    elseif cmd == "mouse" then
+        -- What is under the cursor right now (for "my click didn't go through").
+        local foci = GetMouseFoci and GetMouseFoci() or { GetMouseFocus and GetMouseFocus() }
+        if #foci == 0 then Print("nothing under the cursor (the game world).") end
+        for _, fr in ipairs(foci) do
+            local okF, forb = pcall(fr.IsForbidden, fr)
+            local label
+            if okF and forb then label = "a locked game frame (e.g. a nameplate)"
+            else
+                local okN, nm = pcall(fr.GetDebugName, fr)
+                label = okN and nm or tostring(fr)
+            end
+            Print("under cursor: " .. tostring(label))
+        end
     elseif cmd == "targetred" then
         db.targetRed = not db.targetRed
         for _, fr in pairs(frames) do fr.threatColored = false end
