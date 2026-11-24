@@ -917,6 +917,7 @@ end
 ---------------------------------------------------------------------------
 do
 local hooked = setmetatable({}, { __mode = "k" })
+local mouseTicker
 local function BlizzFrames()
     local list = {}
     if _G.DamageMeter then list[#list + 1] = _G.DamageMeter end
@@ -1009,6 +1010,15 @@ function ApplyBlizzardMeter()
         Fade(f)
     end
     if not (meter and meter:IsShown() and mdb and mdb.hideBlizzard) then RestoreMouse() end
+    -- Blizzard's meter keeps creating row frames as fights go on; new ones arrive
+    -- mouse-enabled and, under our alpha 0, become invisible click-catchers (right-click
+    -- on mobs / loot "randomly" failing until a reload). Re-walk the faded tree each second.
+    if not mouseTicker and C_Timer and C_Timer.NewTicker then
+        mouseTicker = C_Timer.NewTicker(1, function()
+            if not (meter and meter:IsShown() and mdb and mdb.hideBlizzard) then return end
+            for fr in pairs(faded) do pcall(MouseOff, fr) end
+        end)
+    end
 end
 end -- blizzard meter
 

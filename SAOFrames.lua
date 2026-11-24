@@ -3760,7 +3760,10 @@ local function HandleCommand(msg)
         local log = ns.clickLog or {}
         if #log == 0 then Print("no right-clicks recorded yet this session.") end
         Print("last right-clicks (newest first; \"game world\" = the click reached the world):")
-        for _, line in ipairs(log) do print("   " .. line) end
+        for i, line in ipairs(log) do
+            if i > 6 then break end
+            print("   " .. line)
+        end
     elseif cmd == "targetred" then
         db.targetRed = not db.targetRed
         for _, fr in pairs(frames) do fr.threatColored = false end
