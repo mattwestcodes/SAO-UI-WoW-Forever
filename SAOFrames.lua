@@ -2694,22 +2694,11 @@ local function ApplyFriendlyPlateCVars()
     SetCVarSafe("nameplateShowFriends", db.friendlyPlates and "1" or "0")
     SetCVarSafe("nameplateShowFriendlyNPCs", db.friendlyNPCs and "1" or "0")
     if db.friendlyPlates or db.friendlyNPCs then
-        -- Inside dungeons/raids the game forbids addons from touching friendly plates,
-        -- so they'd show Blizzard's default bars: switch them to plain names there.
-        -- Everywhere else: health bars (our SAO plates) rather than name-only.
-        local inInstance, kind = IsInInstance()
-        local locked = inInstance and (kind == "party" or kind == "raid" or kind == "scenario")
-        SetCVarSafe("nameplateShowOnlyNames", locked and "1" or "0")            -- older clients
-        SetCVarSafe("nameplateShowOnlyNameForFriendlyPlayerUnits", locked and "1" or "0") -- 12.x name
-        db.onlyNamesForced = locked or nil -- remember we set name-only, so it can be undone below
-        if locked then
-            -- What addons may still change on the game's locked plates: class-coloured names.
-            SetCVarSafe("nameplateUseClassColorForFriendlyPlayerUnitNames", "1")
-        end
-    elseif db.onlyNamesForced then
-        -- friendly plates turned off while we had name-only on: undo only what we set
-        SetCVarSafe("nameplateShowOnlyNames", "0")
-        SetCVarSafe("nameplateShowOnlyNameForFriendlyPlayerUnits", "0")
+        -- Health bars on friendly plates everywhere (not name-only). Inside dungeons/raids
+        -- the game keeps friendly plates locked to its own default look, but they still
+        -- show health; outside, they get the SAO style.
+        SetCVarSafe("nameplateShowOnlyNames", "0")                       -- older clients
+        SetCVarSafe("nameplateShowOnlyNameForFriendlyPlayerUnits", "0")  -- 12.x name
         db.onlyNamesForced = nil
     end
     -- SAO font on the game's own nameplate text too (the locked friendly plates in

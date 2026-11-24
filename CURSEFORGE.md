@@ -7,7 +7,7 @@
 
 ## What it changes
 - **Unit frames:** player, target, focus, target-of-target, party and raid frames with slanted HP bars, HP %, power bars, class chips, roles, buffs/debuffs, incoming heals and shields, raid markers and ready checks.
-- **Nameplates:** reaction and threat colours, aggro arrows graded by threat % and role (stance/form aware), threat %, cast bars, debuffs, elite/rare borders and difficulty-coloured levels. In dungeons and raids the game locks friendly nameplates for all addons, so those show class-coloured names instead.
+- **Nameplates:** reaction and threat colours, aggro arrows graded by threat % and role (stance/form aware), threat %, cast bars, debuffs, elite/rare borders and difficulty-coloured levels. In dungeons and raids the game locks friendly nameplates for all addons, so those keep the game's default health bars.
 - **Damage / heal meter** built on the game's own combat meter data.
 - **Windows:** chat skin, a round social menu (party / friend / guild / raid / whisper), need/greed/pass rolls, loot, trade, vendor and quest windows in a soft steel-gray glass style.
 - **Layout tools:** `/sao` opens the options; `/sao unlock` shows a grid with snapping so every frame can be moved.
