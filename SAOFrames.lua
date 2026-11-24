@@ -2795,15 +2795,22 @@ local function InitNameplates()
             end
         end
     end)
-    -- Plate health: fast poll (10x a second) so the % keeps up in combat.
-    C_Timer.NewTicker(0.1, function()
-        for _, f in pairs(plateByUnit) do
-            if f.ready then
-                local ok, err = pcall(UpdateHealth, f)
-                if not ok then LogError("plate health: " .. tostring(err)) end
+    -- Plate health: fast poll (~30x a second, same as the unit frames) so the %
+    -- keeps up in combat.
+    do
+        local poll, acc = CreateFrame("Frame"), 0
+        poll:SetScript("OnUpdate", function(_, elapsed)
+            acc = acc + elapsed
+            if acc < 0.033 then return end
+            acc = 0
+            for _, f in pairs(plateByUnit) do
+                if f.ready then
+                    local ok, err = pcall(UpdateHealth, f)
+                    if not ok then LogError("plate health: " .. tostring(err)) end
+                end
             end
-        end
-    end)
+        end)
+    end
     -- Threat and health catch-up for every visible plate.
     C_Timer.NewTicker(0.2, function()
         for _, f in pairs(plateByUnit) do
