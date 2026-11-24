@@ -2,7 +2,7 @@
 ## Title: SAO Frames
 ## Notes: Fan-made, SAO-inspired UI for WoW Forever: unit frames, nameplates, meter, chat, social, loot, trade, vendor and quest windows.
 ## Author: Matt West
-## Version: 1.6.1
+## Version: 1.6.2
 ## Category: Unit Frames
 ## SavedVariables: SAOFramesDB
 ## IconTexture: Interface\Icons\INV_Sword_04
