@@ -944,7 +944,8 @@ end
 -- Alpha 0 still takes mouse input, and EnableMouse on a parent doesn't reach children: walk the tree.
 local function MouseOff(fr)
     if CanTouch(fr) then
-        if mouseOrig[fr] == nil then
+        local known = mouseOrig[fr] ~= nil
+        if not known then
             local click, motion
             if fr.IsMouseClickEnabled and fr.IsMouseMotionEnabled then
                 click, motion = ReadBool(fr, "IsMouseClickEnabled"), ReadBool(fr, "IsMouseMotionEnabled")
@@ -952,10 +953,17 @@ local function MouseOff(fr)
                 click = ReadBool(fr, "IsMouseEnabled")
                 motion = click
             end
-            mouseOrig[fr] = { click == true, motion == true, ReadBool(fr, "IsMouseWheelEnabled") == true }
+            -- Unreadable state: leave the frame alone rather than record a guess we'd
+            -- later "restore" as mouse-off for good.
+            if click ~= nil and motion ~= nil then
+                mouseOrig[fr] = { click, motion, ReadBool(fr, "IsMouseWheelEnabled") == true }
+                known = true
+            end
         end
-        if fr.EnableMouse then pcall(fr.EnableMouse, fr, false) end
-        if fr.EnableMouseWheel then pcall(fr.EnableMouseWheel, fr, false) end
+        if known then
+            if fr.EnableMouse then pcall(fr.EnableMouse, fr, false) end
+            if fr.EnableMouseWheel then pcall(fr.EnableMouseWheel, fr, false) end
+        end
     end
     if fr.GetChildren then
         local kids = { pcall(fr.GetChildren, fr) }

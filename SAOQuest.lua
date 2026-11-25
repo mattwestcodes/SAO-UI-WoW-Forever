@@ -696,7 +696,8 @@ local function PlaceActionButton(btn, d)
             local ax = area:GetCenter()
             local fx = parent:GetCenter()
             if ax and fx and not IsSecret(ax) and not IsSecret(fx) then
-                btn:ClearAllPoints()
+                -- same anchor point as above, so SetPoint just replaces it (no ClearAllPoints:
+                -- a failure here must not leave the button with no anchor at all)
                 local dx = fx - ax
                 if d.right then btn:SetPoint("TOPLEFT", area, "BOTTOM", 18 + dx, -12)
                 else btn:SetPoint("TOPRIGHT", area, "BOTTOM", -18 + dx, -12) end

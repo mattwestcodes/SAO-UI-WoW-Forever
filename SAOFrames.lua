@@ -561,7 +561,9 @@ end
 -- (nameplates keep their threat colors). Tapped mobs stay grey.
 local function IsTargetEnemy(f, u)
     if f.preview or f.isPlate or db.targetRed == false or f.unit ~= "target" then return false end
-    return Plain(UnitCanAttack("player", u or f.unit)) == true
+    local can = Plain(UnitCanAttack("player", u or f.unit))
+    if can ~= nil then return can == true end
+    return Plain(UnitIsFriend("player", u or f.unit)) == false -- both secret: stay neutral
 end
 
 local function ColorHealth(f, u, cur, max)
@@ -1780,6 +1782,8 @@ local function UpdateFrame(f)
 end
 
 local POWER_EVENTS = { UNIT_POWER_FREQUENT = true, UNIT_MAXPOWER = true, UNIT_DISPLAYPOWER = true }
+-- (ns.SafeOnEvent, defined after OnEvent, is what the frames register: errors are logged
+-- instead of repeating on every event.)
 
 local function OnEvent(f, event)
     if event == "PLAYER_FOCUS_CHANGED" or event == "PLAYER_TARGET_CHANGED"
@@ -1805,6 +1809,11 @@ local function OnEvent(f, event)
     else
         UpdateFrame(f)
     end
+end
+
+function ns.SafeOnEvent(f, event, ...)
+    local ok, err = pcall(OnEvent, f, event, ...)
+    if not ok then LogError("frame " .. tostring(event) .. ": " .. tostring(err)) end
 end
 
 -- Threat glow, Threat Plates style.
@@ -2321,7 +2330,7 @@ local function CreateUnitFrame(cfg, parent)
 
     AddTooltip(f)
     RegisterUnitEvents(f)
-    f:SetScript("OnEvent", OnEvent)
+    f:SetScript("OnEvent", ns.SafeOnEvent)
     f:HookScript("OnShow", UpdateFrame)
 
     frames[cfg.key] = f
@@ -2683,29 +2692,48 @@ end
 -- Game settings (CVars) are saved by the game itself, so they'd outlive the addon. Remember
 -- each one's value from before SAO Frames first touched it and put it back at logout, so
 -- disabling or removing the addon leaves nameplates exactly as the player had them.
+-- Earlier versions changed these without remembering the old values, so the value found
+-- on first touch isn't the player's own: use the game's default as the "original" instead.
+ns.CVAR_SEED = {
+    nameplateShowOnlyNames = "0",
+    nameplateShowOnlyNameForFriendlyPlayerUnits = "0",
+    nameplateShowFriends = "0",
+    nameplateShowFriendlyNPCs = "0",
+}
+ns.cvarTouched = {}
+
 local function SetCVarSafe(name, value)
     local get = C_CVar and C_CVar.GetCVar or GetCVar
-    if not db.cvarOriginal then
-        -- Earlier versions already changed these without remembering the old values, so the
-        -- current ones aren't the player's: start from the game's defaults for them.
-        db.cvarOriginal = {
-            nameplateShowOnlyNames = "0",
-            nameplateShowOnlyNameForFriendlyPlayerUnits = "0",
-            nameplateUseClassColorForFriendlyPlayerUnitNames = "0",
-        }
+    db.cvarOriginal = db.cvarOriginal or {}
+    if (db.cvarOrigVersion or 0) < 2 then
+        -- 1.6.2 recorded these after 1.6.1 had already changed them; and stop restoring the
+        -- class-colour-names CVar, which the addon no longer touches.
+        db.cvarOriginal.nameplateShowFriends = nil
+        db.cvarOriginal.nameplateShowFriendlyNPCs = nil
+        db.cvarOriginal.nameplateUseClassColorForFriendlyPlayerUnitNames = nil
+        db.cvarOrigVersion = 2
     end
-    if db.cvarOriginal[name] == nil and get then
-        local ok, cur = pcall(get, name)
-        if ok and type(cur) == "string" then db.cvarOriginal[name] = cur end
+    if db.cvarOriginal[name] == nil then
+        if ns.CVAR_SEED[name] then
+            db.cvarOriginal[name] = ns.CVAR_SEED[name]
+        elseif get then
+            local ok, cur = pcall(get, name)
+            if ok and type(cur) == "string" then db.cvarOriginal[name] = cur end
+        end
     end
+    ns.cvarTouched[name] = true
     local fn = C_CVar and C_CVar.SetCVar or SetCVar
     if fn then pcall(fn, name, value) end
 end
 
+-- Put back only the settings this session actually changed (others are the player's).
 function ns.RestoreCVars()
     local fn = C_CVar and C_CVar.SetCVar or SetCVar
     if not (fn and db and db.cvarOriginal) then return end
-    for name, value in pairs(db.cvarOriginal) do pcall(fn, name, value) end
+    for name in pairs(ns.cvarTouched) do
+        local value = db.cvarOriginal[name]
+        if value ~= nil then pcall(fn, name, value) end
+    end
 end
 
 local function ApplyFriendlyPlateCVars()
@@ -2726,6 +2754,8 @@ local function ApplyFriendlyPlateCVars()
     -- TextureLoadingGroupMixin helpers (the same route and key Plater uses).
     -- NOT smoothHealthUpdates: an addon-set value makes Blizzard's plate code tainted, and
     -- its smoothing then does arithmetic on secret health values -> an error every frame.
+    -- The options-table key is written once per session, only when turning the style on;
+    -- turning it off never writes Blizzard's table back (a /reload restores its default).
     local style = db.dungeonFriendlyStyle ~= false and (db.friendlyPlates or db.friendlyNPCs)
     if style or ns.dungeonStyleSet then
         if style then
@@ -2734,12 +2764,12 @@ local function ApplyFriendlyPlateCVars()
             SetCVarSafe("nameplateShowFriendlyClassColor", db.cvarOriginal.nameplateShowFriendlyClassColor)
         end
         local mixin = TextureLoadingGroupMixin
-        if mixin and mixin.AddTexture and mixin.RemoveTexture then
+        if style and not ns.realmKeyWritten and mixin and mixin.RemoveTexture then
+            ns.realmKeyWritten = true
             for _, name in ipairs({ "NamePlateFriendlyFrameOptions", "DefaultCompactNamePlateFriendlyFrameOptions" }) do
                 local opts = _G[name]
                 if type(opts) == "table" then
-                    local holder = { textures = opts }
-                    pcall(style and mixin.RemoveTexture or mixin.AddTexture, holder, "updateNameUsesGetUnitName")
+                    pcall(mixin.RemoveTexture, { textures = opts }, "updateNameUsesGetUnitName")
                 end
             end
         end
@@ -2753,7 +2783,7 @@ local function ApplyFriendlyPlateCVars()
         local n = db.friendlyClickThrough ~= false and 10000 or 0
         if n > 0 or ns.clickThroughSet then
             ns.clickThroughOk = pcall(C_NamePlateManager.SetNamePlateHitTestInsets, friendly, n, n, n, n)
-            ns.clickThroughSet = n > 0 or nil
+            if ns.clickThroughOk then ns.clickThroughSet = n > 0 or nil end
         end
     end
     -- SAO font on the game's own nameplate text too (the locked friendly plates in
@@ -2787,12 +2817,28 @@ local function InitNameplates()
         ev:RegisterEvent(e)
     end
     for e in pairs(CAST_EVENTS) do pcall(ev.RegisterEvent, ev, e) end
+    -- Per-plate unit events run through pcall: an error here would otherwise repeat on
+    -- every event for every plate (the game's "large number of errors" popup).
+    function ns.PlateUnitEvent(f, event)
+        if CAST_EVENTS[event] then
+            OnCastEvent(f, event)
+        elseif event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
+            UpdateHealth(f)
+        elseif event == "UNIT_AURA" then
+            f.auraDirty = true
+        elseif event == "UNIT_THREAT_LIST_UPDATE" then
+            UpdateThreat(f)
+        else
+            UpdatePlate(f)
+        end
+    end
     ev:SetScript("OnEvent", function(_, event, unit)
         if event == "NAME_PLATE_UNIT_ADDED" then
             local ok, err = pcall(OnPlateAdded, unit)
             if not ok then LogError("plate added: " .. tostring(err)) end
         elseif event == "NAME_PLATE_UNIT_REMOVED" then
-            OnPlateRemoved(unit)
+            local ok, err = pcall(OnPlateRemoved, unit)
+            if not ok then LogError("plate removed: " .. tostring(err)) end
         elseif event == "PLAYER_LOGOUT" then
             ns.RestoreCVars()
         elseif event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then
@@ -2804,7 +2850,12 @@ local function InitNameplates()
                 for _, fr in pairs(frames) do if fr:IsShown() then UpdateFrame(fr) end end
             end)
         elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_REGEN_ENABLED" then
-            for _, f in pairs(plateByUnit) do if f.ready then PlateTargetHighlight(f) end end
+            for _, f in pairs(plateByUnit) do
+                if f.ready then
+                    local ok, err = pcall(PlateTargetHighlight, f)
+                    if not ok then LogError("plate target: " .. tostring(err)) end
+                end
+            end
             if event == "PLAYER_REGEN_ENABLED" and not ev.cvarsApplied then
                 ev.cvarsApplied = true
                 ApplyFriendlyPlateCVars()
@@ -2812,17 +2863,8 @@ local function InitNameplates()
         else
             local f = unit and plateByUnit[unit]
             if not f then return end
-            if CAST_EVENTS[event] then
-                OnCastEvent(f, event)
-            elseif event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
-                UpdateHealth(f)
-            elseif event == "UNIT_AURA" then
-                f.auraDirty = true
-            elseif event == "UNIT_THREAT_LIST_UPDATE" then
-                UpdateThreat(f)
-            else
-                UpdatePlate(f)
-            end
+            local ok, err = pcall(ns.PlateUnitEvent, f, event)
+            if not ok then LogError("plate " .. tostring(event) .. ": " .. tostring(err)) end
         end
     end)
     -- Plate health: fast poll (~30x a second, same as the unit frames) so the %
@@ -2933,7 +2975,7 @@ local function CreateToTFrame(cfg)
 
     AddTooltip(f)
     RegisterUnitEvents(f)
-    f:SetScript("OnEvent", OnEvent)
+    f:SetScript("OnEvent", ns.SafeOnEvent)
     f:HookScript("OnShow", UpdateFrame)
 
     frames[cfg.key] = f
@@ -2973,7 +3015,7 @@ local function StyleRaidButton(b)
     })
     AddTooltip(b)
 
-    b:SetScript("OnEvent", OnEvent)
+    b:SetScript("OnEvent", ns.SafeOnEvent)
     b:HookScript("OnShow", UpdateFrame)
     b:HookScript("OnAttributeChanged", function(self, name, value)
         if name ~= "unit" or value == self.unit then return end
@@ -3778,13 +3820,15 @@ local function HandleCommand(msg)
         db.dungeonFriendlyStyle = db.dungeonFriendlyStyle == false
         ApplyFriendlyPlateCVars()
         Print("dungeon friendly plates: class colours, no realm names "
-            .. (db.dungeonFriendlyStyle and "on." or "off.") .. " Takes effect as plates reappear.")
+            .. (db.dungeonFriendlyStyle and "on." or "off (realm names come back after /reload).")
+            .. (db.nameplates and "" or " Applies once SAO nameplates are turned on."))
     elseif cmd == "clickthrough" then
         if InCombatLockdown() then Print("can't change nameplate clicks in combat; try again after.") return end
         db.friendlyClickThrough = db.friendlyClickThrough == false
         ApplyFriendlyPlateCVars()
         Print("click-through friendly nameplates " .. (db.friendlyClickThrough and "on." or "off.")
-            .. (ns.clickThroughOk == false and " (the game refused the change)" or ""))
+            .. (ns.clickThroughOk == false and " (the game refused the change)" or "")
+            .. (db.nameplates and "" or " Applies once SAO nameplates are turned on."))
     elseif cmd == "mouse" then
         -- What is under the cursor right now (for "my click didn't go through").
         local foci = GetMouseFoci and GetMouseFoci() or { GetMouseFocus and GetMouseFocus() }
@@ -3897,8 +3941,12 @@ do
         local okN, nm = pcall(fr.GetDebugName, fr)
         if okN and nm and nm ~= "" then return nm end
         local okP, parent = pcall(fr.GetParent, fr)
-        local pn = okP and parent and select(2, pcall(parent.GetDebugName, parent))
-        return "unnamed frame" .. (type(pn) == "string" and (" inside " .. pn) or "")
+        local pn
+        if okP and parent then
+            local okD, d = pcall(parent.GetDebugName, parent)
+            if okD then pn = d end
+        end
+        return "unnamed frame" .. (type(pn) == "string" and pn ~= "" and (" inside " .. pn) or "")
     end
     local log = {}
     ns.clickLog = log
@@ -3990,8 +4038,12 @@ local function Init()
             AddCastBar(f, 20, 28, BAR_W - 40, 12) -- above the bar, clear of the THREAT % text
             for e in pairs(CAST_EVENTS) do pcall(f.RegisterUnitEvent, f, e, f.unit) end
             f:SetScript("OnEvent", function(self, event, ...)
-                if CAST_EVENTS[event] then OnCastEvent(self, event) return end
-                OnEvent(self, event, ...)
+                if CAST_EVENTS[event] then
+                    local ok, err = pcall(OnCastEvent, self, event)
+                    if not ok then LogError("cast " .. tostring(event) .. ": " .. tostring(err)) end
+                    return
+                end
+                ns.SafeOnEvent(self, event, ...)
                 if event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" or event == "PLAYER_ENTERING_WORLD" then
                     CheckCasting(self)
                 end
@@ -4057,12 +4109,19 @@ local function Init()
             if acc < 0.033 then return end
             acc = 0
             for _, f in pairs(frames) do
-                if f:IsVisible() then UpdateHealth(f) end
+                if f:IsVisible() then
+                    local ok, err = pcall(UpdateHealth, f)
+                    if not ok then LogError("frame health: " .. tostring(err)) end
+                end
             end
         end)
     end
 
     C_Timer.NewTicker(0.25, function()
+        local ok, err = pcall(ns.QuarterTick)
+        if not ok then LogError("frame tick: " .. tostring(err)) end
+    end)
+    function ns.QuarterTick()
         for i = 1, 4 do UpdateRange(frames["party" .. i]) end
         for _, b in ipairs(raidButtons) do
             if b:IsVisible() then UpdateRange(b); UpdateThreat(b) end
@@ -4073,7 +4132,7 @@ local function Init()
         end
         local tot = frames.targettarget
         if tot and tot:IsVisible() then UpdateFrame(tot) end
-    end)
+    end
 
     -- Feature inits: each fails on its own (logged) without stopping the rest of Init.
     for _, it in ipairs({ { RefreshTankBuffCache, "threat role" }, { InitNameplates, "nameplates" },
