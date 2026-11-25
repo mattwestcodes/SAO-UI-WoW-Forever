@@ -136,4 +136,4 @@ Toggle with `/sao font` or in the options window. Missing/broken file = normal f
   lists with sub-actions. Macro keybind: `/click SAOFrames_SocialButton`. `/sao socialtoggle` hides the button.
 - **Loot rolls** (`/sao loot`): SAO message boxes with round NEED / GREED / DISENCHANT / PASS buttons and a countdown.
   `/sao loottest` shows a preview. If an SAO roll window ever fails, that roll falls back to Blizzard's window.
-- Dungeons/raids: friendly plates are locked by the game, so they keep Blizzard's default health bars there.
+- Dungeons/raids: friendly plates are locked by the game, so they keep Blizzard's default health bars there, with class colours, smooth health animation and no realm names (`/sao dungeonplates`).
