@@ -34,7 +34,7 @@ local DEFAULTS = {
     friendlyPlates = true, -- turn on friendly player nameplates (health bars, not name-only)
     friendlyNPCs = false,  -- also friendly NPC nameplates (busy in cities)
     friendlyClickThrough = true, -- friendly nameplates don't catch mouse clicks
-    dungeonFriendlyStyle = true, -- Blizzard friendly plates (dungeons): class colours, smooth bars, no realms
+    dungeonFriendlyStyle = true, -- Blizzard friendly plates (dungeons): class colours, no realm names
     threatRole = "auto",   -- "auto" (stance/form/spec/role), "TANK" or "DPS"
     locked = true,
     hideBlizzard = true,
@@ -2721,9 +2721,11 @@ local function ApplyFriendlyPlateCVars()
         db.onlyNamesForced = nil
     end
     -- Blizzard's own friendly plates (the locked ones in dungeons/raids): class-coloured
-    -- health bars, smooth health animation, no realm names. Only the game's own switches
-    -- can reach those plates: one CVar plus keys of its friendly-plate options table,
-    -- set through Blizzard's TextureLoadingGroupMixin helpers (the same route Plater uses).
+    -- health bars and no realm names. Only the game's own switches can reach those plates:
+    -- one CVar plus a key of its friendly-plate options table, set through Blizzard's
+    -- TextureLoadingGroupMixin helpers (the same route and key Plater uses).
+    -- NOT smoothHealthUpdates: an addon-set value makes Blizzard's plate code tainted, and
+    -- its smoothing then does arithmetic on secret health values -> an error every frame.
     local style = db.dungeonFriendlyStyle ~= false and (db.friendlyPlates or db.friendlyNPCs)
     if style or ns.dungeonStyleSet then
         if style then
@@ -2737,7 +2739,6 @@ local function ApplyFriendlyPlateCVars()
                 local opts = _G[name]
                 if type(opts) == "table" then
                     local holder = { textures = opts }
-                    pcall(style and mixin.AddTexture or mixin.RemoveTexture, holder, "smoothHealthUpdates")
                     pcall(style and mixin.RemoveTexture or mixin.AddTexture, holder, "updateNameUsesGetUnitName")
                 end
             end
@@ -3301,7 +3302,7 @@ local function Help()
     print("  /sao guilds  - <Guild> under player names (now " .. (db.guildNames ~= false and "on" or "off") .. ");  /sao restz - floating Z's while resting")
     print("  /sao elite   - gold/silver/red borders on elite, rare and boss enemies (now " .. (db.eliteBorders and "on" or "off") .. ")")
     print("  /sao threatbars  - color enemy health bars by threat in combat (now " .. (db.threatBars and "on" or "off") .. ")")
-    print("  /sao dungeonplates - dungeon friendly plates: class colours, smooth bars, no realms (now " .. (db.dungeonFriendlyStyle ~= false and "on" or "off") .. ")")
+    print("  /sao dungeonplates - dungeon friendly plates: class colours, no realm names (now " .. (db.dungeonFriendlyStyle ~= false and "on" or "off") .. ")")
     print("  /sao clickthrough - friendly nameplates ignore clicks (now " .. (db.friendlyClickThrough ~= false and "on" or "off") .. ")")
     print("  /sao mouse       - show which frame is under the cursor (if a click doesn't go through)")
     print("  /sao clicks      - what each of your last right-clicks landed on")
@@ -3532,7 +3533,7 @@ local function BuildOptions()
         function() Confirm("Toggle SAO nameplates? This reloads your UI.", "plates") end))
     Place(OptCheck(f, "Friendly player health bars", function() return db.friendlyPlates end, function() Run("friendly") end))
     Place(OptCheck(f, "Friendly NPC health bars", function() return db.friendlyNPCs end, function() Run("friendlynpcs") end))
-    Place(OptCheck(f, "Dungeon friendly plates: class colors, smooth", function() return db.dungeonFriendlyStyle ~= false end, function() Run("dungeonplates") end))
+    Place(OptCheck(f, "Dungeon friendly plates: class colors, no realm", function() return db.dungeonFriendlyStyle ~= false end, function() Run("dungeonplates") end))
     Place(OptCheck(f, "Clicks pass through friendly nameplates", function() return db.friendlyClickThrough ~= false end, function() Run("clickthrough") end))
     Place(OptCheck(f, "Threat glow and aggro arrows", function() return db.threat end, function() Run("threat") end))
     Place(OptCheck(f, "Color enemy levels by difficulty", function() return db.levelColors end, function() Run("levels") end))
@@ -3776,7 +3777,7 @@ local function HandleCommand(msg)
         if InCombatLockdown() then Print("can't change nameplate settings in combat; try again after.") return end
         db.dungeonFriendlyStyle = db.dungeonFriendlyStyle == false
         ApplyFriendlyPlateCVars()
-        Print("dungeon friendly plates: class colours, smooth bars, no realm names "
+        Print("dungeon friendly plates: class colours, no realm names "
             .. (db.dungeonFriendlyStyle and "on." or "off.") .. " Takes effect as plates reappear.")
     elseif cmd == "clickthrough" then
         if InCombatLockdown() then Print("can't change nameplate clicks in combat; try again after.") return end
